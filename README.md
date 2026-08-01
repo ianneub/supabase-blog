@@ -4,52 +4,88 @@ A multi-author blog. Anyone can sign in with GitHub to get their own blog at
 `/@their-username`, publish posts, and moderate comments. Readers can comment
 either signed in with GitHub or anonymously with just a display name.
 
+**Live at [blog.ianneubert.com](https://blog.ianneubert.com)**
+
 React + TypeScript + Vite on the front end, Supabase (Postgres, Auth, RLS) as the
-entire back end — there is no server of your own.
+entire back end, deployed as a static bundle on Cloudflare Pages. There is no
+server of our own — the browser talks directly to Supabase, so every access rule
+lives in a row-level security policy rather than in application code.
 
-## Setup
-
-### 1. Install
+## Running it locally
 
 ```bash
 npm install
+cp .env.example .env.local   # then fill in the two values
+npm run dev
 ```
 
-`.env.local` is already pointed at the Supabase project `iephdkkadnuncjmfvnrq`.
-For a different project, copy `.env.example` and fill in the two values.
+Both values come from your Supabase project: **Project Settings → Data API** for
+the URL, and **API Keys** for the publishable key. The publishable key is meant to
+be shipped to the browser — it grants exactly what the RLS policies allow. Never
+put the service-role key in this app.
 
-### 2. Enable GitHub sign-in (required — this cannot be done from code)
+## Connecting it to your own Supabase project
 
-Sign-in fails with `Unsupported provider` until this is done.
+The schema lives in Supabase migrations rather than in this repo. To rebuild it
+from scratch you need three tables — `profiles`, `posts`, `comments` — described
+under [Data model](#data-model), plus the GitHub provider wired up:
 
-**a. Create a GitHub OAuth app** — <https://github.com/settings/developers> →
+**1. Create a GitHub OAuth app** — <https://github.com/settings/developers> →
 _OAuth Apps_ → _New OAuth App_:
 
 | Field | Value |
 | --- | --- |
-| Application name | anything, e.g. `Supabase Blog (dev)` |
-| Homepage URL | `http://localhost:5173` |
-| Authorization callback URL | `https://iephdkkadnuncjmfvnrq.supabase.co/auth/v1/callback` |
+| Homepage URL | your site's URL |
+| Authorization callback URL | `https://<project-ref>.supabase.co/auth/v1/callback` |
 
-The callback URL must be the **Supabase** one above, not localhost. Generate a
-client secret and keep both values handy.
+The callback URL points at **Supabase**, not at your site, and it stays the same
+no matter where the app is hosted. This trips people up constantly.
 
-**b. Paste them into Supabase** — Dashboard → _Authentication_ → _Sign In / Providers_
-→ **GitHub**: toggle on, paste the Client ID and Client Secret, save.
+**2. Paste the credentials into Supabase** — Dashboard → _Authentication_ →
+_Sign In / Providers_ → **GitHub**: toggle on, paste the Client ID and Client
+Secret, save. Until this is done, sign-in fails with `Unsupported provider`.
 
-**c. Set the redirect URLs** — Dashboard → _Authentication_ → _URL Configuration_:
+**3. Set the URLs** — Dashboard → _Authentication_ → _URL Configuration_:
 
-- **Site URL**: `http://localhost:5173`
-- **Redirect URLs**: add `http://localhost:5173/**`
+- **Site URL**: your production origin
+- **Redirect URLs**: every origin the app runs on, each with a `/**` suffix —
+  for this deployment that is `https://blog.ianneubert.com/**`,
+  `https://supabase-blog.pages.dev/**`, and `http://localhost:5173/**`
 
-### 3. Run
+The wildcards matter. OAuth returns to `/dashboard`, so a bare origin will not
+match. When a redirect is not on the allowlist Supabase does not error — it
+silently falls back to **Site URL**, whose default is `http://localhost:3000`.
+That fallback is the cause of nearly every "why did it send me to localhost"
+report.
+
+## Deploying
 
 ```bash
-npm run dev
+npm run deploy           # build + publish to production
+npm run deploy:preview   # build + publish to a preview URL
 ```
 
-The first person to sign in gets a username derived from their GitHub handle and
-can rename it under _Settings_.
+That runs `wrangler pages deploy` against the Cloudflare Pages project
+`supabase-blog`. Two details worth knowing if you fork this:
+
+- The scripts prefix `env -u CLOUDFLARE_API_TOKEN` to drop any ambient token from
+  the shell, so wrangler uses the OAuth credentials from `wrangler login`, and
+  pin `CLOUDFLARE_ACCOUNT_ID` so it never prompts between accounts. Change or
+  remove both for your own setup.
+- `public/_redirects` and `public/_headers` are copied into `dist/` by Vite and
+  interpreted by Pages. The first is what makes client-side routes survive a hard
+  refresh; the second sets caching.
+
+Deploying anywhere new means adding that origin to Supabase's Redirect URLs and
+updating the GitHub OAuth app's Homepage URL — but never its callback URL.
+
+### Why `_redirects` is not optional
+
+`/*  /index.html  200` serves the SPA shell for any path that is not a real file,
+with a **200 rather than a redirect**, so React Router can take over. Without it,
+`/@someone/a-post` works when navigated to in-app but 404s on refresh or when
+opened from a link. Any static host needs an equivalent — an `.htaccess` rewrite
+on Apache, a custom error response on S3/CloudFront.
 
 ## Routes
 
@@ -81,7 +117,8 @@ can each have a `hello-world`.
 
 ### What the policies actually enforce
 
-Verified against the live database by querying as the `anon` role:
+Verified against the live database by querying as the `anon` role, not through the
+app:
 
 - Published posts are readable by everyone; **drafts are visible only to their author**.
 - Anonymous visitors can comment on published posts, but **not on drafts**.
@@ -96,30 +133,23 @@ only the post author can remove them.
 
 ## Notes and trade-offs
 
-- **Anonymous comments are unauthenticated writes.** The policy is scoped as tightly
-  as it can be, but there is no rate limiting or spam filter. Before putting this on
-  the public internet, add a captcha (Supabase supports Turnstile/hCaptcha) or switch
-  guests to Supabase anonymous sign-ins so you get per-user rate limits.
+- **Anonymous comments are unauthenticated writes.** The policy is scoped as
+  tightly as it can be, but there is no rate limiting or spam filter, and because
+  the browser writes straight to Supabase, neither Cloudflare's WAF nor a
+  client-side captcha can gate them — those requests never pass through the site's
+  own domain. Closing this properly means routing comment writes through a Pages
+  Function that verifies a Turnstile token, then dropping the anonymous INSERT
+  policy. The cheap alternative is to require sign-in to comment.
 - **Post bodies are plain text**, split into paragraphs on blank lines and rendered
-  through React, so they are escaped — no HTML injection. Adding a Markdown renderer
-  would mean adding sanitization.
-- **The publishable key in `.env.local` is meant to be public.** It grants exactly
-  what the RLS policies above allow. Never put the service-role key in this app.
-- **Client-side routing**: a static host needs an SPA fallback rewrite to
-  `index.html`, or `/@someone/post` will 404 on refresh.
-- Deploying anywhere other than localhost means adding that origin to the GitHub
-  OAuth app and to Supabase's redirect URLs.
+  through React, so they are escaped — no HTML injection. Adding a Markdown
+  renderer would mean adding sanitization.
+- **Types are generated from the live schema.** `src/lib/database.types.ts` is
+  mostly generated; the aliases at the bottom (`Post`, `Profile`, `PostWithAuthor`,
+  `CommentWithAuthor`) are hand-written and must be re-appended after regenerating:
 
-## Regenerating types
-
-After any schema change:
-
-```bash
-npx supabase gen types typescript --project-id iephdkkadnuncjmfvnrq > src/lib/database.types.ts
-```
-
-The hand-written aliases at the bottom of that file (`Post`, `Profile`,
-`PostWithAuthor`, `CommentWithAuthor`, …) need to be re-appended afterwards.
+  ```bash
+  npx supabase gen types typescript --project-id <project-ref> > src/lib/database.types.ts
+  ```
 
 ## License
 
