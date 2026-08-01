@@ -1,0 +1,30 @@
+{
+  "name": "supabase-blog",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "deploy": "npm run build && env -u CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=4d310f77770c1eeea44a3dcba508ac5a wrangler pages deploy dist --project-name=supabase-blog --branch=main",
+    "deploy:preview": "npm run build && env -u CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID=4d310f77770c1eeea44a3dcba508ac5a wrangler pages deploy dist --project-name=supabase-blog --branch=preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.111.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "oxlint": "^1.75.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0",
+    "wrangler": "^4.118.0"
+  }
+}

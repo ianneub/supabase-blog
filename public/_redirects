@@ -1,0 +1,3 @@
+# SPA fallback: client-side routes like /@ian/my-post must serve index.html
+# with a 200, not a redirect, so React Router can handle them.
+/*  /index.html  200
