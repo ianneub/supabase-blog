@@ -40,11 +40,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # Version omitted on purpose: setup-cli@v3 reads it from package-lock.json,
+      # where `supabase` is a devDependency. CI therefore uses the same CLI as
+      # local development, and Dependabot bumps it as an ordinary dependency PR
+      # that this workflow has to pass first.
       - uses: supabase/setup-cli@v3
-        with:
-          # Pinned rather than `latest`: a breaking CLI release should fail on a
-          # deliberate bump, not silently on an unrelated commit.
-          version: 2.111.0
 
       # Builds a throwaway database from supabase/migrations/ alone. If the
       # migrations are not self-contained, this fails here rather than in
@@ -67,11 +67,11 @@ jobs:
     if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v7
+      # Version omitted on purpose: setup-cli@v3 reads it from package-lock.json,
+      # where `supabase` is a devDependency. CI therefore uses the same CLI as
+      # local development, and Dependabot bumps it as an ordinary dependency PR
+      # that this workflow has to pass first.
       - uses: supabase/setup-cli@v3
-        with:
-          # Pinned rather than `latest`: a breaking CLI release should fail on a
-          # deliberate bump, not silently on an unrelated commit.
-          version: 2.111.0
 
       - name: Check credentials are configured
         id: creds
