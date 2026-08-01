@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes } from 'react-router'
 import Layout from './components/Layout'
 import NotFound from './components/NotFound'
 import RequireAuth from './components/RequireAuth'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { USERNAME_PATTERN, blogPath, normalizeUsername } from '../lib/slug'
 import { useAuth } from '../context/auth-context'

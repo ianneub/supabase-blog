@@ -195,8 +195,15 @@ three jobs:
 | Job | What it proves | Needs secrets |
 | --- | --- | --- |
 | **build** | Lints, typechecks, and compiles the bundle | no |
+| **audit** | No high-severity advisories in shipped dependencies | no |
 | **security** | Builds a database from `supabase/migrations/` alone, then runs [`supabase/tests/rls_test.sql`](supabase/tests/rls_test.sql) | no |
 | **drift** | The live database still matches `supabase/migrations/` | yes |
+
+**audit** splits the two cases rather than treating them alike. A high-severity
+advisory in a production dependency ends up in the browser bundle and fails the
+build. One in a dev dependency never reaches a visitor, so it is reported in the
+run summary as a warning instead of blocking an unrelated merge. Both run on the
+daily schedule too, since advisories are published without anyone committing.
 
 The **security** job is the important one, and it is hermetic — it never touches
 production, so it runs on pull requests from forks. Two kinds of assertion:

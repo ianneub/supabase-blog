@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { postPath, slugify } from '../lib/slug'
 import { useAuth } from '../context/auth-context'

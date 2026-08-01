@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import type { Post } from '../lib/database.types'
 import { blogPath, formatDate, postPath } from '../lib/slug'

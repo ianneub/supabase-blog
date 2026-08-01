@@ -35,6 +35,40 @@ jobs:
           VITE_SUPABASE_URL: https://example.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
 
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Blocking. These are the packages that end up in the browser bundle, so
+      # a high-severity advisory here is a vulnerability shipped to visitors.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      # Informational. Build tooling never reaches a visitor, so an advisory in
+      # a dev dependency should be visible without blocking an unrelated merge.
+      # It still gets surfaced in the run summary rather than silently dropped.
+      - name: Audit dev dependencies
+        if: always()
+        run: |
+          if npm audit --audit-level=high > audit.txt 2>&1; then
+            echo "No high-severity advisories in dev dependencies." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Dev-dependency advisories (not blocking)"
+              echo '```'
+              cat audit.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::high-severity advisories present in dev dependencies"
+          fi
+
   security:
     name: Security assertions
     runs-on: ubuntu-latest

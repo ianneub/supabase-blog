@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router'
 import { supabase } from '../lib/supabase'
 import type { Post, Profile } from '../lib/database.types'
 import { formatDate, parseHandle, postPath } from '../lib/slug'
