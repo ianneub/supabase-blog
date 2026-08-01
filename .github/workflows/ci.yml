@@ -10,7 +10,11 @@ on:
     - cron: '17 9 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Keyed on the event as well as the ref. Without that, the daily scheduled run
+  # and a push to main share a group and cancel each other, which reads as a
+  # failed build rather than a superseded one. Pushes to the same branch still
+  # supersede their predecessors, which is the behaviour actually wanted.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
