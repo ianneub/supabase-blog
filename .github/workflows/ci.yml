@@ -18,8 +18,8 @@ jobs:
     name: Lint, typecheck, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -39,10 +39,12 @@ jobs:
     name: Security assertions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
         with:
-          version: latest
+          # Pinned rather than `latest`: a breaking CLI release should fail on a
+          # deliberate bump, not silently on an unrelated commit.
+          version: 2.111.0
 
       # Builds a throwaway database from supabase/migrations/ alone. If the
       # migrations are not self-contained, this fails here rather than in
@@ -64,10 +66,12 @@ jobs:
     # Forks cannot read secrets, and this needs production credentials.
     if: github.event_name != 'pull_request'
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
         with:
-          version: latest
+          # Pinned rather than `latest`: a breaking CLI release should fail on a
+          # deliberate bump, not silently on an unrelated commit.
+          version: 2.111.0
 
       - name: Check credentials are configured
         id: creds
