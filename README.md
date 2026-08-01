@@ -120,3 +120,7 @@ npx supabase gen types typescript --project-id iephdkkadnuncjmfvnrq > src/lib/da
 
 The hand-written aliases at the bottom of that file (`Post`, `Profile`,
 `PostWithAuthor`, `CommentWithAuthor`, …) need to be re-appended afterwards.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
