@@ -45,6 +45,16 @@ jobs:
       # local development, and Dependabot bumps it as an ordinary dependency PR
       # that this workflow has to pass first.
       - uses: supabase/setup-cli@v3
+        id: cli
+
+      # Proves the lockfile resolution above actually happened, rather than
+      # silently falling back to `latest` when the two happen to match.
+      - name: Confirm CLI matches package-lock.json
+        run: |
+          locked=$(node -p "require('./package-lock.json').packages['node_modules/supabase'].version")
+          actual="${{ steps.cli.outputs.version }}"
+          echo "lockfile: $locked | installed: $actual"
+          [ "$locked" = "$actual" ] || { echo "::error::CLI $actual does not match lockfile $locked"; exit 1; }
 
       # Builds a throwaway database from supabase/migrations/ alone. If the
       # migrations are not self-contained, this fails here rather than in
