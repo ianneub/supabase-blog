@@ -26,9 +26,9 @@ put the service-role key in this app.
 
 ## Connecting it to your own Supabase project
 
-The schema lives in Supabase migrations rather than in this repo. To rebuild it
-from scratch you need three tables — `profiles`, `posts`, `comments` — described
-under [Data model](#data-model), plus the GitHub provider wired up:
+The full schema is in [`supabase/migrations/`](supabase/migrations), applied in
+filename order. Point the Supabase CLI at a new project and `supabase db push`
+reproduces every table, index, trigger, and policy. Then wire up GitHub:
 
 **1. Create a GitHub OAuth app** — <https://github.com/settings/developers> →
 _OAuth Apps_ → _New OAuth App_:
@@ -130,6 +130,59 @@ app:
 Comment moderation: a post's author can delete any comment on their own post, and
 signed-in commenters can delete their own. Anonymous comments carry no identity, so
 only the post author can remove them.
+
+## Auditing the security rules
+
+The migration files are the intent; the database is the truth. They can drift —
+anyone with dashboard access can add a policy without a migration. Audit the
+database directly, not the files.
+
+**1. Confirm RLS is on and every table has policies.** A table with RLS enabled and
+zero policies denies everything; a table with RLS *off* is wide open to anyone
+holding the publishable key, which is public by design.
+
+```sql
+select c.relname as table, c.relrowsecurity as rls_enabled, count(p.polname) as policies
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+left join pg_policy p on p.polrelid = c.oid
+where n.nspname = 'public' and c.relkind = 'r'
+group by 1, 2 order by 1;
+```
+
+Expected: `comments` 5, `posts` 5, `profiles` 3, all with `rls_enabled = true`.
+
+**2. Read every policy expression.** Pay attention to the `roles` column — `anon`
+means logged-out visitors on the public internet.
+
+```sql
+select tablename, policyname, cmd, roles::text, qual as using_expr, with_check
+from pg_policies where schemaname = 'public'
+order by tablename, cmd;
+```
+
+**3. Run Supabase's linter**, which catches missing RLS and functions exposed over
+the REST API: Dashboard → _Advisors_ → _Security_.
+
+**4. Test as the roles themselves.** This is the only step that proves anything;
+the ones above only tell you what the rules say. Inside a transaction, `set local
+role anon` makes the session an anonymous visitor, so the checks below either
+succeed or fail exactly as a real attacker's would:
+
+```sql
+begin;
+set local role anon;
+-- should return only published posts
+select count(*) from public.posts;
+-- should raise: new row violates row-level security policy
+insert into public.posts (author_id, title, slug, content, published)
+values ('<some-uuid>', 'x', 'x', 'x', true);
+rollback;
+```
+
+The claims under [What the policies actually enforce](#what-the-policies-actually-enforce)
+were each verified this way — including that an anonymous visitor cannot set
+`author_id` on a comment, and cannot comment on an unpublished draft.
 
 ## Notes and trade-offs
 
