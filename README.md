@@ -27,8 +27,10 @@ put the service-role key in this app.
 ## Connecting it to your own Supabase project
 
 The full schema is in [`supabase/migrations/`](supabase/migrations), applied in
-filename order. Point the Supabase CLI at a new project and `supabase db push`
-reproduces every table, index, trigger, and policy. Then wire up GitHub:
+filename order — tables, indexes, triggers, RLS policies, and the table grants
+the API roles need. `supabase db push` against a new project reproduces it, and
+CI proves that by building a throwaway database from these files alone on every
+pull request. Then wire up GitHub:
 
 **1. Create a GitHub OAuth app** — <https://github.com/settings/developers> →
 _OAuth Apps_ → _New OAuth App_:
@@ -183,6 +185,49 @@ rollback;
 The claims under [What the policies actually enforce](#what-the-policies-actually-enforce)
 were each verified this way — including that an anonymous visitor cannot set
 `author_id` on a comment, and cannot comment on an unpublished draft.
+
+### Automated in CI
+
+Every step above runs on each pull request, so none of it depends on someone
+remembering to check. [`.github/workflows/ci.yml`](.github/workflows/ci.yml) has
+three jobs:
+
+| Job | What it proves | Needs secrets |
+| --- | --- | --- |
+| **build** | Lints, typechecks, and compiles the bundle | no |
+| **security** | Builds a database from `supabase/migrations/` alone, then runs [`supabase/tests/rls_test.sql`](supabase/tests/rls_test.sql) | no |
+| **drift** | The live database still matches `supabase/migrations/` | yes |
+
+The **security** job is the important one, and it is hermetic — it never touches
+production, so it runs on pull requests from forks. Two kinds of assertion:
+
+- **Structural** — RLS on for every `public` table, no table left with zero
+  policies, trigger functions not callable over REST, and an exact inventory of
+  which policies `anon` can reach. That inventory is a tripwire: adding,
+  removing, or re-scoping an anon-reachable policy fails the build until the
+  change is made deliberately in the test file.
+- **Behavioural** — `set local role anon` and `set local role authenticated`
+  with a `sub` claim, then attempting the attacks: reading a draft, forging
+  `author_id`, commenting on an unpublished post, editing another user's post,
+  renaming another user's blog. These assert on real database behaviour rather
+  than on the text of a policy.
+
+The suite is verified to fail, not just to pass. Disabling RLS on `posts`,
+adding an `anon` INSERT policy, or widening the published-posts policy to
+`using (true)` each make it exit non-zero.
+
+The **drift** job needs `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, and
+`SUPABASE_DB_PASSWORD` as repository secrets. Without them it skips rather than
+fails, so the repo works when forked. It also runs on a daily schedule, because
+drift usually arrives without a commit — someone edits a policy in the
+dashboard.
+
+Run the security job locally:
+
+```bash
+supabase start
+psql "$(supabase status -o json | jq -r .DB_URL)" -v ON_ERROR_STOP=1 -f supabase/tests/rls_test.sql
+```
 
 ## Notes and trade-offs
 

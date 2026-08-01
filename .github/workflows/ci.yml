@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Drift can appear without a commit — someone edits a policy in the
+    # dashboard. Check daily rather than only when code changes.
+    - cron: '17 9 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, typecheck, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+        env:
+          # Build-time only. Both values are public by design: the publishable
+          # key grants exactly what the RLS policies allow. Real values are not
+          # needed to prove the bundle compiles.
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+
+  security:
+    name: Security assertions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Builds a throwaway database from supabase/migrations/ alone. If the
+      # migrations are not self-contained, this fails here rather than in
+      # production.
+      - name: Start local Postgres and apply migrations
+        run: supabase start -x realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
+
+      # Structural checks plus behavioural ones that run as `anon` and
+      # `authenticated`, so they exercise the policies the way an attacker
+      # would rather than trusting their text.
+      - name: Assert security rules
+        run: |
+          psql "$(supabase status -o json | jq -r '.DB_URL')" \
+            -v ON_ERROR_STOP=1 -q -f supabase/tests/rls_test.sql
+
+  drift:
+    name: Schema drift vs production
+    runs-on: ubuntu-latest
+    # Forks cannot read secrets, and this needs production credentials.
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Check credentials are configured
+        id: creds
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$PROJECT" ]; then
+            echo "SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_ID not set — skipping drift check." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Link to the project
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}"
+
+      # Compares the live database against supabase/migrations/. Any output
+      # means production contains something no migration describes — typically
+      # a change made through the dashboard.
+      - name: Diff live database against migrations
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          supabase db diff --linked --schema public > drift.sql 2>&1 || true
+          if [ -s drift.sql ] && grep -qvE '^\s*(--.*)?$' drift.sql; then
+            echo "### Schema drift detected" >> "$GITHUB_STEP_SUMMARY"
+            echo '```sql' >> "$GITHUB_STEP_SUMMARY"
+            cat drift.sql >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "The live database differs from supabase/migrations/."
+            cat drift.sql
+            exit 1
+          fi
+          echo "No drift: production matches supabase/migrations/."
