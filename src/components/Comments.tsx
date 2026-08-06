@@ -149,7 +149,7 @@ export default function Comments({ postId, postAuthorId }: Props) {
               required
             />
             <span className="hint">
-              Or <Link to="/login">sign in with GitHub</Link> to comment under your account.
+              Or <Link to="/login">sign in</Link> to comment under your account.
             </span>
           </label>
         )}

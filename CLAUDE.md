@@ -16,6 +16,23 @@ Every symbol this app uses (`BrowserRouter`, `Routes`, `Route`, `Link`, `NavLink
 `Outlet`, `Navigate`, `useParams`, `useNavigate`, `useLocation`) comes from
 `react-router`.
 
+## Auth settings live in two places that must agree
+
+`supabase/config.toml`'s `[auth]` block configures the **local** stack only; the
+hosted project is configured in the dashboard. When they drift, sign-up behaves one
+way in `npm run dev` and another in production. `enable_confirmations = true` is the
+pair that matters most — with it on, `signUp` returns `session: null` and the user
+is not logged in until they click the emailed link.
+
+Locally no mail is delivered. Confirmation and password-reset messages land in the
+inbox at <http://127.0.0.1:54324>.
+
+A new email account gets its `/@handle` from the `handle_new_user()` trigger, which
+reads `raw_user_meta_data->>'user_name'` — so `LoginPage` passes the requested name
+through `signUp`'s `options.data`, not through a later `profiles` update. The trigger
+sanitises it and resolves collisions by appending `-1`, so a requested name is a
+preference, not a guarantee.
+
 ## Schema changes go through migrations, never the dashboard
 
 Add a file to `supabase/migrations/`. The **drift** CI job diffs production against

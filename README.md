@@ -1,8 +1,9 @@
 # Supabase Blog
 
-A multi-author blog. Anyone can sign in with GitHub to get their own blog at
-`/@their-username`, publish posts, and moderate comments. Readers can comment
-either signed in with GitHub or anonymously with just a display name.
+A multi-author blog. Anyone can sign in — with an email address and password, or
+with GitHub — to get their own blog at `/@their-username`, publish posts, and
+moderate comments. Readers can comment either signed in or anonymously with just
+a display name.
 
 **Live at [blog.ianneubert.com](https://blog.ianneubert.com)**
 
@@ -30,7 +31,34 @@ The full schema is in [`supabase/migrations/`](supabase/migrations), applied in
 filename order — tables, indexes, triggers, RLS policies, and the table grants
 the API roles need. `supabase db push` against a new project reproduces it, and
 CI proves that by building a throwaway database from these files alone on every
-pull request. Then wire up GitHub:
+pull request. Then wire up the two ways in.
+
+### Email and password
+
+Dashboard → _Authentication_ → _Sign In / Providers_ → **Email**: toggle on.
+Two settings there decide how sign-up behaves:
+
+- **Confirm email** — on, which is the default and what this app is written for.
+  `signUp` returns `session: null` and the app shows a "check your email" screen
+  instead of logging the person in. Turning it off makes sign-up log the user
+  straight in; the code handles both, but keep
+  [`supabase/config.toml`](supabase/config.toml)'s `auth.email.enable_confirmations`
+  matching the dashboard or local dev diverges from production.
+- **Minimum password length** — mirrored by the `minLength={6}` on the forms.
+
+Supabase's built-in SMTP sender is **rate limited to a few emails per hour and is
+not for production use**. Confirmations and password resets both depend on it, so
+configure your own SMTP under _Authentication_ → _Emails_ → _SMTP Settings_ before
+real users arrive, or sign-ups will silently stop receiving mail.
+
+No migration is needed for email accounts. The `handle_new_user()` trigger reads
+`raw_user_meta_data->>'user_name'` to build the profile username, and the sign-up
+form passes the requested handle there through `options.data` — the same key the
+GitHub provider populates. The trigger sanitises it and appends `-1`, `-2` on a
+collision, so a user who asks for a taken name gets a near miss rather than an
+error, and can rename in settings.
+
+### GitHub
 
 **1. Create a GitHub OAuth app** — <https://github.com/settings/developers> →
 _OAuth Apps_ → _New OAuth App_:
@@ -54,11 +82,12 @@ Secret, save. Until this is done, sign-in fails with `Unsupported provider`.
   for this deployment that is `https://blog.ianneubert.com/**`,
   `https://supabase-blog.pages.dev/**`, and `http://localhost:5173/**`
 
-The wildcards matter. OAuth returns to `/dashboard`, so a bare origin will not
-match. When a redirect is not on the allowlist Supabase does not error — it
-silently falls back to **Site URL**, whose default is `http://localhost:3000`.
-That fallback is the cause of nearly every "why did it send me to localhost"
-report.
+The wildcards matter. OAuth returns to `/dashboard`, email confirmation returns to
+`/dashboard`, and password resets return to `/reset-password`, so a bare origin
+will not match any of them. When a redirect is not on the allowlist Supabase does
+not error — it silently falls back to **Site URL**, whose default is
+`http://localhost:3000`. That fallback is the cause of nearly every "why did it
+send me to localhost" report.
 
 ## Deploying
 

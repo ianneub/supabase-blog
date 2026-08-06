@@ -8,6 +8,8 @@ import BlogsPage from './pages/BlogsPage'
 import BlogPage from './pages/BlogPage'
 import PostPage from './pages/PostPage'
 import LoginPage from './pages/LoginPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import DashboardPage from './pages/DashboardPage'
 import EditorPage from './pages/EditorPage'
 import SettingsPage from './pages/SettingsPage'
@@ -21,6 +23,10 @@ export default function App() {
             <Route index element={<HomePage />} />
             <Route path="blogs" element={<BlogsPage />} />
             <Route path="login" element={<LoginPage />} />
+            <Route path="forgot-password" element={<ForgotPasswordPage />} />
+            {/* Public on purpose: the recovery link is what creates the session,
+                so RequireAuth would bounce the arriving user to /login. */}
+            <Route path="reset-password" element={<ResetPasswordPage />} />
 
             <Route element={<RequireAuth />}>
               <Route path="dashboard" element={<DashboardPage />} />

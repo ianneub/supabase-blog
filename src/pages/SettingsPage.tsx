@@ -70,7 +70,10 @@ export default function SettingsPage() {
       <div className="profile-header">
         <Avatar url={profile.avatar_url} name={name} size={56} />
         <p className="muted small">
-          Your avatar comes from GitHub. Your blog is at{' '}
+          {profile.avatar_url
+            ? 'Your avatar comes from GitHub. '
+            : 'Signing in by email gives you an initial rather than a picture. '}
+          Your blog is at{' '}
           <Link to={blogPath(profile.username)}>
             <code>/@{profile.username}</code>
           </Link>

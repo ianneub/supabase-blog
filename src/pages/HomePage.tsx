@@ -42,7 +42,8 @@ export default function HomePage() {
       <div className="empty">
         <h1>No posts yet</h1>
         <p className="muted">
-          Sign in with GitHub, and whatever you publish shows up here and on your own blog.
+          Sign in with an email address or GitHub, and whatever you publish shows up here and on
+          your own blog.
         </p>
         <Link to="/login" className="btn btn-primary">
           Start your blog

@@ -55,7 +55,7 @@ export default function Layout() {
       </main>
 
       <footer className="site-footer">
-        <span>Built with React + Supabase · sign in with GitHub to start your own blog</span>
+        <span>Built with React + Supabase · sign in to start your own blog</span>
       </footer>
     </div>
   )

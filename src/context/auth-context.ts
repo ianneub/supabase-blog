@@ -9,6 +9,20 @@ export type AuthValue = {
   loading: boolean
   refreshProfile: () => Promise<void>
   signInWithGitHub: () => Promise<{ error: string | null }>
+  signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>
+  /**
+   * `confirmationSent` is true when Supabase issued a confirmation email rather
+   * than a session, which is every successful sign-up while "Confirm email" is on.
+   * It is deliberately true for an address that already has an account too — see
+   * the note in AuthContext.
+   */
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    username: string,
+  ) => Promise<{ error: string | null; confirmationSent: boolean }>
+  sendPasswordReset: (email: string) => Promise<{ error: string | null }>
+  updatePassword: (password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
 }
 
